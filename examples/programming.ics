@@ -1,0 +1,10 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//FORM//Example Programming//EN
+BEGIN:VEVENT
+UID:form-example-lower-20261022
+DTSTART;VALUE=DATE:20261022
+SUMMARY:Lower body strength
+DESCRIPTION:Back squat 5x5 @ 80kg\nRomanian deadlift 3x8 @ 60kg\nRest two minutes between sets.
+END:VEVENT
+END:VCALENDAR

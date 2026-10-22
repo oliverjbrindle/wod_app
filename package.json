@@ -1,0 +1,32 @@
+{
+  "name": "wod_app",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test:e2e": "playwright test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/oliverjbrindle/wod_app.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/oliverjbrindle/wod_app/issues"
+  },
+  "homepage": "https://github.com/oliverjbrindle/wod_app#readme",
+  "dependencies": {
+    "ical.js": "^2.2.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "vite": "^8.3.5"
+  }
+}
