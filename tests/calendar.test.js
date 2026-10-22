@@ -84,8 +84,8 @@ test("complete workout template imports all lifts into a single session", async 
     [
       ["Back squat", 5, 5],
       ["Bench press", 3, 8],
-      ["Romanian deadlift", 3, 10],
       ["Pull-ups", 3, 6],
+      ["Running", 3, 1],
     ],
   );
 });
@@ -96,4 +96,27 @@ test("supports bullets and rejects out-of-range prescriptions", () => {
   );
   assert.equal(parseExercises("1. Bench press 3x8 @ 135lbs")[0].unit, "lb");
   assert.equal(parseExercises("Squat 500x5").length, 0);
+});
+
+test("structured lift and cardio prescriptions use their own fields", () => {
+  const exercises = parseExercises(
+    "lift, Back squat, 5, 5, 80, kg\ncardio, Running, 3, time, 10, min, 2\ncardio, Row, 4, distance, 500, m, 4\ncardio, Bike, 2, calories, 20, kcal, 5\nlift, Pull-ups, 3, 6, 100, % of Bodyweight\nlift, Bench press, 3, 8, 75, % of Max",
+  );
+  assert.equal(exercises.length, 6);
+  assert.equal(exercises[1].sets, 3);
+  assert.equal(exercises[1].zone, 2);
+  assert.equal(exercises[2].cardioUnit, "m");
+  assert.equal(exercises[3].measurement, "calories");
+  assert.equal(exercises[4].unit, "BW%");
+  assert.equal(exercises[5].unit, "%");
+});
+test("cardio validates measurement units, sets, magnitude and zones", () => {
+  for (const line of [
+    "cardio, Run, 0, time, 30, min, 2",
+    "cardio, Run, 1, time, -1, min, 2",
+    "cardio, Run, 1, time, 30, km, 2",
+    "cardio, Run, 1, time, 30, min, 6",
+  ])
+    assert.throws(() => parseExercises(line));
+  assert.equal(parseExercises("cardio, Run, time, 30, min, 2")[0].sets, 1);
 });

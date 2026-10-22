@@ -2,9 +2,121 @@ import ICAL from "ical.js";
 export const localDate = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 export const uid = () => crypto.randomUUID();
+export const isCardio = (e) => e.type === "cardio";
+export const unitLabel = (unit) =>
+  unit === "%" ? "% of Max" : unit === "BW%" ? "% of Bodyweight" : unit;
+export const cardioUnits = {
+  time: ["min", "sec", "hr"],
+  distance: ["km", "m", "mi"],
+  calories: ["kcal"],
+};
+export function migrateExercises(data) {
+  for (const w of data.workouts)
+    for (const e of w.exercises) {
+      e.type ||= "lift";
+      for (const item of [e, ...(e.logs || [])])
+        if (item.unit === "BW") {
+          item.unit = "BW%";
+          if (item.weight !== "")
+            item.weight = String(Number(item.weight) * 100);
+        }
+    }
+  return data;
+}
+function parseStructured(line) {
+  const parts = line.split(",").map((s) => s.trim());
+  const type = parts[0].toLowerCase();
+  if (!["cardio", "lift"].includes(type)) return null;
+  const fail = () => {
+    throw Error(
+      `Invalid ${type} programming: ${line}. Use the calendar template format.`,
+    );
+  };
+  if (!parts[1]) return fail();
+  if (type === "cardio") {
+    if (![6, 7].includes(parts.length)) return fail();
+    const values =
+      parts.length === 6 ? [parts[0], parts[1], "1", ...parts.slice(2)] : parts;
+    const [, name, sets, measurement, magnitude, rawUnit, zone] = values;
+    if (!Number.isInteger(+sets) || +sets < 1 || +sets > 50) return fail();
+    const measure = measurement.toLowerCase();
+    const aliases = {
+      minutes: "min",
+      minute: "min",
+      seconds: "sec",
+      second: "sec",
+      hours: "hr",
+      hour: "hr",
+      cal: "kcal",
+      calories: "kcal",
+      miles: "mi",
+      meters: "m",
+      kilometers: "km",
+    };
+    const unit = aliases[rawUnit.toLowerCase()] || rawUnit.toLowerCase();
+    if (
+      !cardioUnits[measure]?.includes(unit) ||
+      !magnitude ||
+      !Number.isFinite(+magnitude) ||
+      +magnitude <= 0 ||
+      !Number.isInteger(+zone) ||
+      +zone < 1 ||
+      +zone > 5
+    )
+      return fail();
+    return {
+      id: uid(),
+      type,
+      name,
+      measurement: measure,
+      magnitude: +magnitude,
+      cardioUnit: unit,
+      zone: +zone,
+      sets: +sets,
+      reps: 1,
+      weight: "",
+      unit: "kg",
+      done: [],
+    };
+  }
+  if (parts.length !== 6) return fail();
+  const [, name, sets, reps, weight, rawUnit] = parts;
+  const aliases = {
+    lbs: "lb",
+    "% of max": "%",
+    "% of bodyweight": "BW%",
+    "bw%": "BW%",
+    bw: "BW%",
+  };
+  const unit = aliases[rawUnit.toLowerCase()] || rawUnit.toLowerCase();
+  if (
+    !Number.isInteger(+sets) ||
+    +sets < 1 ||
+    +sets > 50 ||
+    !Number.isInteger(+reps) ||
+    +reps < 1 ||
+    +reps > 1000 ||
+    !Number.isFinite(+weight) ||
+    +weight < 0 ||
+    !["kg", "lb", "%", "BW%"].includes(unit)
+  )
+    return fail();
+  return {
+    id: uid(),
+    type,
+    name,
+    sets: +sets,
+    reps: +reps,
+    weight,
+    unit,
+    done: [],
+  };
+}
 // One event is one workout; each prescription line becomes a lift inside it.
 export function parseExercises(description) {
   return description.split(/\r?\n/).flatMap((line) => {
+    const structured = parseStructured(line.trim());
+    if (structured) return [structured];
     const match = line
       .trim()
       .replace(/^(?:[-*•]\s+|\d+[.)]\s+)/, "")
@@ -19,14 +131,16 @@ export function parseExercises(description) {
     return [
       {
         id: uid(),
+        type: "lift",
         name: match[1].replace(/[:–-]$/, "").trim(),
         sets,
         reps,
-        weight: match[4] || "",
+        weight:
+          unit === "bw" && match[4] ? String(+match[4] * 100) : match[4] || "",
         unit: unit?.startsWith("lb")
           ? "lb"
           : unit === "bw"
-            ? "BW"
+            ? "BW%"
             : unit || "kg",
         done: [],
       },
@@ -35,6 +149,12 @@ export function parseExercises(description) {
 }
 
 export function logSet(exercise, index, weight = exercise.weight) {
+  if (isCardio(exercise)) {
+    exercise.done = exercise.done.includes(index)
+      ? exercise.done.filter((n) => n !== index)
+      : [...exercise.done, index];
+    return;
+  }
   if (exercise.done.includes(index)) {
     exercise.done = exercise.done.filter((n) => n !== index);
     exercise.logs = (exercise.logs || []).filter((log) => log.set !== index);
@@ -57,26 +177,24 @@ export function liftHistory(workouts) {
   const lifts = new Map();
   for (const workout of workouts)
     for (const exercise of workout.exercises) {
-      if (!exercise.done.length) continue;
+      if (isCardio(exercise) || !exercise.done.length) continue;
       const key = exercise.name.trim().replace(/\s+/g, " ").toLowerCase();
       if (!lifts.has(key))
         lifts.set(key, { key, name: exercise.name.trim(), entries: [] });
       for (const index of exercise.done) {
         const logged = exercise.logs?.find((log) => log.set === index);
-        lifts
-          .get(key)
-          .entries.push({
-            date: workout.date,
-            title: workout.title,
-            set: index + 1,
-            weight: logged?.weight ?? exercise.weight,
-            reps: logged?.reps ?? exercise.reps,
-            unit:
-              (logged?.unit ?? exercise.unit) === "lbs"
-                ? "lb"
-                : (logged?.unit ?? exercise.unit),
-            estimated: !logged,
-          });
+        lifts.get(key).entries.push({
+          date: workout.date,
+          title: workout.title,
+          set: index + 1,
+          weight: logged?.weight ?? exercise.weight,
+          reps: logged?.reps ?? exercise.reps,
+          unit:
+            (logged?.unit ?? exercise.unit) === "lbs"
+              ? "lb"
+              : (logged?.unit ?? exercise.unit),
+          estimated: !logged,
+        });
       }
     }
   return [...lifts.values()]

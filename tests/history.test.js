@@ -54,3 +54,38 @@ test("legacy sets remain visible and names normalize while units stay separate",
   assert.equal(lifts[0].entries[0].unit, "lb");
   assert.equal(lifts[0].entries[1].estimated, true);
 });
+
+test("cardio supports individual set completion and never enters lift history", () => {
+  const e = {
+    ...exercise(),
+    type: "cardio",
+    sets: 3,
+    measurement: "time",
+    magnitude: 10,
+    cardioUnit: "min",
+    zone: 2,
+  };
+  logSet(e, 0);
+  logSet(e, 1);
+  assert.deepEqual(e.done, [0, 1]);
+  assert.equal(liftHistory([workout(e)]).length, 0);
+  logSet(e, 0);
+  assert.deepEqual(e.done, [1]);
+});
+
+test("legacy bodyweight ratios migrate once without changing max percentages", async () => {
+  const { migrateExercises } = await import("../src/data.js");
+  const e = exercise();
+  e.unit = "BW";
+  e.weight = "0.75";
+  e.done = [0];
+  e.logs = [{ set: 0, unit: "BW", weight: "1", reps: 5 }];
+  const data = { workouts: [workout(e)] };
+  migrateExercises(data);
+  migrateExercises(data);
+  assert.equal(e.unit, "BW%");
+  assert.equal(e.weight, "75");
+  assert.equal(e.logs[0].weight, "100");
+  assert.equal(e.logs[0].unit, "BW%");
+  assert.equal(e.type, "lift");
+});

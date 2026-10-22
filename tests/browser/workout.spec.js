@@ -114,3 +114,74 @@ test("complete workout import and actual lift history survive reload and backup"
     page.getByRole("cell", { name: "82.5 kg", exact: true }),
   ).toBeVisible();
 });
+
+test("cardio scheduler supports sets and targets through completion and backup", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Schedule a workout" }).click();
+  await page.getByLabel("Session name").fill("Cardio intervals");
+  await page.getByRole("button", { name: "Add exercise" }).click();
+  await page.getByLabel("Exercise type").selectOption("cardio");
+  await page.getByLabel("Exercise", { exact: true }).fill("Bike");
+  await page.getByLabel("Sets", { exact: true }).fill("2");
+  await page
+    .getByRole("combobox", { name: "Measurement", exact: true })
+    .selectOption("distance");
+  await page.getByLabel("Target", { exact: true }).fill("5");
+  await page
+    .getByRole("combobox", { name: "Unit", exact: true })
+    .selectOption("km");
+  await page.getByLabel("Heart rate zone").selectOption("3");
+  await page.getByRole("button", { name: "Save workout" }).click();
+  await expect(page.getByText("2 × 5 km · Zone 3")).toBeVisible();
+  await page.getByRole("button", { name: "Start workout" }).click();
+  await page
+    .getByRole("button", { name: "Complete cardio", exact: true })
+    .click();
+  await expect(page.getByText("1 of 2 steps completed")).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Active workout" }).click();
+  await page
+    .getByRole("button", { name: "Complete cardio", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Finish workout" }).click();
+  await expect(
+    page.getByRole("button", { name: "Session completed" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Lift history" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your next set starts your story." }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "App & data" }).click();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export backup" }).click();
+  const download = await downloadPromise;
+  page.once("dialog", (d) => d.accept());
+  await page.locator("#backup-file").setInputFiles(await download.path());
+  await expect(page.getByRole("status")).toHaveText("Backup restored.");
+});
+test("bodyweight and max percentage options retain percentage values", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Schedule a workout" }).click();
+  await page.getByLabel("Session name").fill("Bodyweight");
+  await page.getByRole("button", { name: "Add exercise" }).click();
+  await page.getByLabel("Exercise", { exact: true }).fill("Pull-ups");
+  await page
+    .getByRole("combobox", { name: "Unit", exact: true })
+    .selectOption("BW%");
+  await page.getByLabel("Bodyweight %", { exact: true }).fill("100");
+  await expect(
+    page.getByRole("option", { name: "% of Max", exact: true }),
+  ).toHaveAttribute("value", "%");
+  await page.getByRole("button", { name: "Save workout" }).click();
+  await page.getByRole("button", { name: "Start workout" }).click();
+  await expect(page.getByLabel("Bodyweight percentage")).toHaveValue("100");
+  await page.getByRole("button", { name: "Complete set", exact: true }).click();
+  await page.getByRole("button", { name: "Lift history" }).click();
+  await expect(
+    page.getByRole("cell", { name: "100 % of Bodyweight", exact: true }),
+  ).toBeVisible();
+});

@@ -45,14 +45,14 @@ All workout data is stored in localStorage on the current browser/device. Calend
 Create **one event per workout**. Set the event title to the workout name. Put each lift on its own line in the description:
 
 ```text
-Back squat 5x5 @ 80kg
-Bench press 3x8 @ 50kg
-Romanian deadlift 3x10 @ 60kg
-Pull-ups 3x6
+lift, Back squat, 5, 5, 80, kg
+lift, Bench press, 3, 8, 75, % of Max
+lift, Pull-ups, 3, 6, 100, % of Bodyweight
+cardio, Running, 3, time, 10, min, 2
 Notes: Rest 2 minutes between sets.
 ```
 
-Use `Exercise name SETSxREPS @ WEIGHTkg` (or `lb`). Weight is optional. Keep sets between 1 and 50 and reps between 1 and 1000. Bullets and numbered lines are supported. Export your calendar as `.ics`, then import it. All four lifts appear inside **one** workout. Do not create a separate event for each lift. Non-prescription lines stay as notes. Use consistent lift names to combine history correctly.
+Use `Exercise name SETSxREPS @ WEIGHTkg` (or `lb`). Weight is optional. Keep sets between 1 and 50 and reps between 1 and 1000. Bullets and numbered lines are supported. Export your calendar as `.ics`, then import it. All exercises appear inside **one** workout. Do not create a separate event for each lift. Non-prescription lines stay as notes. Use consistent lift names to combine history correctly.
 
 Download the ready-made example from **App & data → Download a complete workout calendar template**, or use [examples/programming.ics](examples/programming.ics). Change the event title, date and UID for each new workout. In raw ICS, description line breaks are escaped as `\n`, while a calendar editor accepts real line breaks. The supplied file already handles this encoding.
 
@@ -61,3 +61,26 @@ Download the ready-made example from **App & data → Download a complete workou
 The **Lift history** tab appears in the bottom navigation on phones and the sidebar on desktop. Select a lift to see each completed set with its session date, weight, unit and reps. The active workout lets you enter the actual weight for each set; the small numbered set buttons use the prescribed weight. Undoing a set removes its history entry. New sets preserve a snapshot even if you later edit the prescription. Existing completed sets without snapshots fall back to the prescription and are marked with an asterisk. Kilograms, pounds, percentages and bodyweight are kept separate. Deleting a workout deletes its history. Existing local workouts and older backups remain supported; the original storage key is intentionally retained.
 
 After deployment, reopen the app online to receive the updated service worker. iOS may retain the old installed icon/name; export a backup before reinstalling, then add the updated site to the Home Screen as STACK and restore the backup if needed.
+
+## Cardio and lift programming
+
+Choose **Lift** or **Cardio** as the first field of each exercise in the workout editor. Cardio supports sets, exercise name, a target (time/distance/calories), unit, and heart-rate zone 1–5. Each set has the same target and can be completed or undone separately in the active session. A mixed session's progress counts both lift sets and cardio sets as steps. Cardio is excluded from lift weight history. No heart-rate sensor connection or automatic cardio measurement is provided; targets are prescriptions and completion is manual.
+
+Use one description line per exercise:
+
+```text
+lift, Back squat, 5, 5, 80, kg
+lift, Bench press, 3, 8, 75, % of Max
+lift, Pull-ups, 3, 6, 100, % of Bodyweight
+cardio, Running, 3, time, 10, min, 2
+cardio, Rowing, 4, distance, 500, m, 4
+cardio, Bike, 2, calories, 20, kcal, 5
+```
+
+- Lift: `lift, exercise name, sets, reps, weight, unit`.
+- Cardio: `cardio, exercise name, sets, measurement type, measurement magnitude, unit, heart rate zone`.
+- Time units: `min`, `sec`, `hr`; distance: `km`, `m`, `mi`; calories: `kcal`.
+- Sets: 1–50. Lift reps: 1–1,000. Cardio target: positive number. Zone: 1–5.
+- Percentage units are `% of Max` and `% of Bodyweight`. Enter `75` for 75%, not `0.75`. They are percentages, not automatically calculated loads. Historical `%` remains the internal max-percentage identifier. Older `BW` ratios migrate to percentages (e.g. `0.75 BW` → `75 % of Bodyweight`) without changing kg/lb or max percentages. Existing backups and older lift notation remain supported.
+- The earlier six-field cardio format without sets still imports as one set. Missing/invalid fields in explicitly typed programming are reported rather than silently skipped. Exercise names in these formats must not contain commas.
+- In a calendar editor, enter ordinary commas. Raw ICS `DESCRIPTION` commas must be escaped as `\,` and newlines as `\n`; the downloadable template already does this.

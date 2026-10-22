@@ -7,6 +7,10 @@ import {
   progress,
   logSet,
   liftHistory,
+  isCardio,
+  unitLabel,
+  cardioUnits,
+  migrateExercises,
 } from "./data.js";
 const KEY = "form.workouts.v1";
 let state = { workouts: [], active: null };
@@ -15,7 +19,7 @@ try {
   const saved = JSON.parse(localStorage.getItem(KEY) || "null");
   if (saved) {
     validateBackup(saved);
-    state = saved;
+    state = migrateExercises(saved);
   }
 } catch {
   storageError =
@@ -94,23 +98,34 @@ function calendar(upcoming) {
 }
 function sessionCard(w) {
   const p = progress(w);
-  return `<article class="session-card"><div class="card-top"><span class="tag">${w.finished ? "COMPLETED" : "STRENGTH & CONDITIONING"}</span><button class="icon-button" data-edit="${w.id}" aria-label="Edit ${esc(w.title)}">✎</button></div><h3>${esc(w.title)}</h3><p>${w.exercises.length} exercises <span>·</span> ${p.total} sets ${p.done ? `<span>·</span> ${p.done} done` : ""}</p><div class="exercise-preview">${
+  return `<article class="session-card"><div class="card-top"><span class="tag">${w.finished ? "COMPLETED" : "STRENGTH & CONDITIONING"}</span><button class="icon-button" data-edit="${w.id}" aria-label="Edit ${esc(w.title)}">✎</button></div><h3>${esc(w.title)}</h3><p>${w.exercises.length} exercises <span>·</span> ${p.total} ${w.exercises.some(isCardio) ? "steps" : "sets"} ${p.done ? `<span>·</span> ${p.done} done` : ""}</p><div class="exercise-preview">${
     w.exercises
       .slice(0, 3)
       .map(
         (e) =>
-          `<div><span>${esc(e.name)}</span><strong>${e.sets} × ${e.reps} <small>${esc(e.weight)} ${e.weight ? esc(e.unit) : ""}</small></strong></div>`,
+          `<div><span>${esc(e.name)}</span><strong>${isCardio(e) ? `${e.sets} × ${e.magnitude} ${esc(e.cardioUnit)} · Zone ${e.zone}` : `${e.sets} × ${e.reps} <small>${esc(e.weight)} ${e.weight ? esc(unitLabel(e.unit)) : ""}</small>`}</strong></div>`,
       )
       .join("") || "<span>Add exercises to start tracking sets.</span>"
   }</div><button class="${w.finished ? "secondary" : "primary"} full" data-start="${w.id}">${w.finished ? "Review workout" : state.active === w.id ? "Resume workout →" : "Start workout →"}</button></article>`;
 }
+function exerciseSummary(e) {
+  return isCardio(e)
+    ? `${e.sets} sets × ${e.magnitude} ${esc(e.cardioUnit)} · ${esc(e.measurement)} · Zone ${e.zone}`
+    : `${e.sets} sets × ${e.reps} reps ${e.weight ? `@ ${esc(e.weight)} ${esc(unitLabel(e.unit))}` : ""}`;
+}
+function focusExercise(e) {
+  if (isCardio(e))
+    return `<div class="prescription"><div><strong>${e.magnitude}</strong><span>${esc(e.cardioUnit)} · ${esc(e.measurement)}</span></div><div><strong>${e.zone}</strong><span>HEART RATE ZONE</span></div><div><strong>${e.done.length + 1}<small> / ${e.sets}</small></strong><span>SET</span></div></div><button class="accent full" aria-label="Complete cardio" data-complete="${e.id}">✓ Complete cardio</button>`;
+  return `<div class="prescription"><div><strong>${esc(e.weight) || "—"}</strong><span>${esc(unitLabel(e.unit))}</span></div><div><strong>${e.reps}</strong><span>REPS</span></div><div><strong>${e.done.length + 1}<small> / ${e.sets}</small></strong><span>SET</span></div></div><label class="actual-weight">${e.unit === "BW%" ? "Bodyweight percentage" : e.unit === "%" ? "% of Max for this set" : "Weight for this set"} (${esc(unitLabel(e.unit))})<input id="actual-weight" type="number" min="0" step="0.01" value="${esc(e.weight)}" placeholder="Unweighted"></label><button class="accent full" aria-label="Complete set" data-complete="${e.id}">✓ Complete set</button>`;
+}
 function active() {
   const w = state.workouts.find((w) => w.id === state.active);
   if (!w)
-    return `<div class="page-heading"><div><div class="eyebrow">ONE SET AT A TIME</div><h1>Stay in your rhythm<span>.</span></h1><p>Your current lift and every set, right here.</p></div></div><div class="large-empty"><div class="empty-icon">◎</div><h2>Ready when you are.</h2><p>Choose a scheduled workout to begin your session.</p><button class="primary" data-view="calendar">Go to calendar →</button></div>`;
+    return `<div class="page-heading"><div><div class="eyebrow">ONE STEP AT A TIME</div><h1>Stay in your rhythm<span>.</span></h1><p>Your current exercise and progress, right here.</p></div></div><div class="large-empty"><h2>Ready when you are.</h2><p>Choose a scheduled workout to begin your session.</p><button class="primary" data-view="calendar">Go to calendar →</button></div>`;
   const p = progress(w),
-    current = w.exercises.find((e) => e.done.length < e.sets);
-  return `<div class="page-heading"><div><div class="eyebrow">${w.finished ? "SESSION COMPLETE" : "ACTIVE SESSION"} · ${nice(w.date)}</div><h1>${esc(w.title)}<span>.</span></h1><p>${w.finished ? "A little stronger than yesterday." : "Focus on this set. The next one can wait."}</p></div><button class="secondary" data-edit="${w.id}">Edit session</button></div><div class="workout-layout"><section><div class="focus-card"><div class="eyebrow">${current ? "CURRENT LIFT" : "ALL SETS COMPLETE"}</div><h2>${current ? esc(current.name) : "Good work."}</h2>${current ? `<div class="prescription"><div><strong>${esc(current.weight) || "—"}</strong><span>${esc(current.unit)}</span></div><div><strong>${current.reps}</strong><span>REPS</span></div><div><strong>${current.done.length + 1}<small> / ${current.sets}</small></strong><span>SET</span></div></div><label class="actual-weight">Weight for this set (${esc(current.unit)})<input id="actual-weight" type="number" min="0" step="0.01" value="${esc(current.weight)}" placeholder="Unweighted"></label><button class="accent full" aria-label="Complete set" data-complete="${current.id}">✓ Complete set</button>` : `<p>${p.total ? "Every prescribed set is logged." : "Add exercises to track your sets."}</p>`}<p class="save-note">Progress saves automatically on this device.</p></div><div class="exercise-list">${w.exercises.map((e, i) => `<article class="lift-row"><div class="lift-heading"><span class="lift-number">${String(i + 1).padStart(2, "0")}</span><div><h3>${esc(e.name)}</h3><p>${e.sets} sets × ${e.reps} reps ${e.weight ? `@ ${esc(e.weight)} ${esc(e.unit)}` : ""}</p></div></div><div class="set-buttons">${Array.from({ length: e.sets }, (_, s) => `<button data-set="${e.id}" data-index="${s}" class="${e.done.includes(s) ? "done" : ""}" aria-pressed="${e.done.includes(s)}" aria-label="${esc(e.name)}, set ${s + 1}${e.done.includes(s) ? ", completed" : ""}">${e.done.includes(s) ? "✓" : s + 1}</button>`).join("")}</div></article>`).join("")}</div></section><aside class="workout-summary"><div class="eyebrow">SESSION PROGRESS</div><div class="progress-number">${p.percent}<span>%</span></div><div class="progress-bar"><i style="width:${p.percent}%"></i></div><p>${p.done} of ${p.total} sets completed</p><button class="primary full" id="finish" ${!p.total || p.done !== p.total || w.finished ? "disabled" : ""}>${w.finished ? "Session completed ✓" : "Finish workout"}</button>${w.notes ? `<h3>Programming notes</h3><p class="notes">${esc(w.notes)}</p>` : ""}<div class="tip"><p>Keep Stack Days open to track sets. iPhone Live Activities and Dynamic Island need a native iOS app and aren’t available in this PWA.</p></div></aside></div>`;
+    current = w.exercises.find((e) => e.done.length < e.sets),
+    label = w.exercises.some(isCardio) ? "steps" : "sets";
+  return `<div class="page-heading"><div><div class="eyebrow">${w.finished ? "SESSION COMPLETE" : "ACTIVE SESSION"} · ${nice(w.date)}</div><h1>${esc(w.title)}<span>.</span></h1><p>${w.finished ? "A little stronger than yesterday." : "Focus on this exercise. The next one can wait."}</p></div><button class="secondary" data-edit="${w.id}">Edit session</button></div><div class="workout-layout"><section><div class="focus-card"><div class="eyebrow">${current ? (isCardio(current) ? "CURRENT CARDIO" : "CURRENT LIFT") : "ALL EXERCISES COMPLETE"}</div><h2>${current ? esc(current.name) : "Good work."}</h2>${current ? focusExercise(current) : `<p>${p.total ? "Every prescribed exercise is logged." : "Add exercises to track your session."}</p>`}<p class="save-note">Progress saves automatically on this device.</p></div><div class="exercise-list">${w.exercises.map((e, i) => `<article class="lift-row"><div class="lift-heading"><span class="lift-number">${String(i + 1).padStart(2, "0")}</span><div><h3>${esc(e.name)}</h3><p>${exerciseSummary(e)}</p></div></div><div class="set-buttons">${Array.from({ length: e.sets }, (_, n) => `<button data-set="${e.id}" data-index="${n}" class="${e.done.includes(n) ? "done" : ""}" aria-pressed="${e.done.includes(n)}" aria-label="${esc(e.name)}, ${isCardio(e) ? "cardio set " + (n + 1) : "set " + (n + 1)}${e.done.includes(n) ? ", completed" : ""}">${e.done.includes(n) ? "✓" : isCardio(e) ? "Cardio set " + (n + 1) : n + 1}</button>`).join("")}</div></article>`).join("")}</div></section><aside class="workout-summary"><div class="eyebrow">SESSION PROGRESS</div><div class="progress-number">${p.percent}<span>%</span></div><div class="progress-bar"><i style="width:${p.percent}%"></i></div><p>${p.done} of ${p.total} ${label} completed</p><button class="primary full" id="finish" ${!p.total || p.done !== p.total || w.finished ? "disabled" : ""}>${w.finished ? "Session completed ✓" : "Finish workout"}</button>${w.notes ? `<h3>Programming notes</h3><p class="notes">${esc(w.notes)}</p>` : ""}<div class="tip"><p>Keep Stack Days open to track exercises. iPhone Live Activities and Dynamic Island require a native iOS app.</p></div></aside></div>`;
 }
 function history() {
   const lifts = liftHistory(state.workouts);
@@ -131,10 +146,10 @@ function history() {
         ),
       }))
     : [];
-  return `<div class="page-heading"><div><div class="eyebrow">BUILD ON WHAT YOU HAVE DONE</div><h1>Lift history<span>.</span></h1><p>Your logged weights, reps, and completed sets for every lift.</p></div></div>${!lift ? `<div class="large-empty"><div class="empty-icon">↗</div><h2>Your next set starts your story.</h2><p>Complete a set in an active workout to see your lift history here.</p><button class="primary" data-view="calendar">Go to calendar →</button></div>` : `<section class="history-panel"><label>Lift<select id="history-lift">${lifts.map((l) => `<option value="${esc(l.key)}" ${l.key === lift.key ? "selected" : ""}>${esc(l.name)}</option>`).join("")}</select></label><div class="history-summary"><div><span>COMPLETED SETS</span><strong>${lift.entries.length}</strong></div>${stats.map((stat) => `<div><span>HEAVIEST · ${esc(stat.unit)}</span><strong>${stat.best} <small>${esc(stat.unit)}</small></strong></div>`).join("")}</div><div class="table-scroll"><table><caption>${esc(lift.name)} — completed set history</caption><thead><tr><th scope="col">Date / workout</th><th scope="col">Set</th><th scope="col">Weight</th><th scope="col">Reps</th></tr></thead><tbody>${lift.entries.map((e) => `<tr><td><strong>${nice(e.date, { month: "short", day: "numeric", year: "numeric" })}</strong><span>${esc(e.title)}</span></td><td>${e.set}</td><td>${e.weight !== "" ? `${esc(e.weight)} ${esc(e.unit)}` : "Unweighted"}${e.estimated ? " *" : ""}</td><td>${e.reps}</td></tr>`).join("")}</tbody></table></div><p class="history-note">Only completed sets appear here. Weights stay in their recorded units. * Older sets use their workout prescription because no set-level weight was saved. Deleting a workout also removes its history.</p></section>`}`;
+  return `<div class="page-heading"><div><div class="eyebrow">BUILD ON WHAT YOU HAVE DONE</div><h1>Lift history<span>.</span></h1><p>Your logged weights, reps, and completed sets for every lift.</p></div></div>${!lift ? `<div class="large-empty"><div class="empty-icon">↗</div><h2>Your next set starts your story.</h2><p>Complete a set in an active workout to see your lift history here.</p><button class="primary" data-view="calendar">Go to calendar →</button></div>` : `<section class="history-panel"><label>Lift<select id="history-lift">${lifts.map((l) => `<option value="${esc(l.key)}" ${l.key === lift.key ? "selected" : ""}>${esc(l.name)}</option>`).join("")}</select></label><div class="history-summary"><div><span>COMPLETED SETS</span><strong>${lift.entries.length}</strong></div>${stats.map((stat) => `<div><span>HEAVIEST · ${esc(unitLabel(stat.unit))}</span><strong>${stat.best} <small>${esc(unitLabel(stat.unit))}</small></strong></div>`).join("")}</div><div class="table-scroll"><table><caption>${esc(lift.name)} — completed set history</caption><thead><tr><th scope="col">Date / workout</th><th scope="col">Set</th><th scope="col">Weight</th><th scope="col">Reps</th></tr></thead><tbody>${lift.entries.map((e) => `<tr><td><strong>${nice(e.date, { month: "short", day: "numeric", year: "numeric" })}</strong><span>${esc(e.title)}</span></td><td>${e.set}</td><td>${e.weight !== "" ? `${esc(e.weight)} ${esc(unitLabel(e.unit))}` : "Unweighted"}${e.estimated ? " *" : ""}</td><td>${e.reps}</td></tr>`).join("")}</tbody></table></div><p class="history-note">Only completed sets appear here. Weights stay in their recorded units. * Older sets use their workout prescription because no set-level weight was saved. Deleting a workout also removes its history.</p></section>`}`;
 }
 function settings() {
-  return `<div class="page-heading"><div><div class="eyebrow">BUILT AROUND YOU</div><h1>Your app. Your data<span>.</span></h1><p>Private by design. Keep a copy of what matters.</p></div></div><section class="settings-card"><h2>Back up your training</h2><p>Workouts and set progress stay in this browser. Clearing site data or removing the app can erase them. Export regular backups.</p><button class="primary" id="export">↓ Export backup</button> <button class="secondary" id="restore">↥ Restore backup</button></section><section class="settings-card"><h2>Install & train offline</h2><p>On iPhone, open this site in Safari, tap Share, then Add to Home Screen. On Android or desktop, use your browser’s Install app option. Installation requires HTTPS (or localhost during development). Open the app online once before training offline.</p><p>Lock Screen Live Activities, interactive lock screen buttons, and Dynamic Island require a native iOS companion app using ActivityKit. They cannot run in a PWA.</p></section><section class="settings-card"><h2>Import your programming</h2><p>Create one calendar event per complete workout. Put the workout name in the title and every lift on its own description line, then export an .ics file. Event titles, calendar dates and descriptions are preserved. Exercise lines like <code>Back squat 5x5 @ 80kg</code> become editable prescriptions. Recurring events are expanded up to 366 occurrences per series and 2,000 sessions per file. Re-importing skips matching events; it does not overwrite your edits.</p><p><a href="/workout-template.ics" download>Download a complete workout calendar template (.ics)</a></p><p>Calendar dates follow the event’s original timezone. Times and reminders are not scheduled. Import explicit calendar exports; external subscription URLs are not fetched.</p></section>`;
+  return `<div class="page-heading"><div><div class="eyebrow">BUILT AROUND YOU</div><h1>Your app. Your data<span>.</span></h1><p>Private by design. Keep a copy of what matters.</p></div></div><section class="settings-card"><h2>Back up your training</h2><p>Workouts and set progress stay in this browser. Clearing site data or removing the app can erase them. Export regular backups.</p><button class="primary" id="export">↓ Export backup</button> <button class="secondary" id="restore">↥ Restore backup</button></section><section class="settings-card"><h2>Install & train offline</h2><p>On iPhone, open this site in Safari, tap Share, then Add to Home Screen. On Android or desktop, use your browser’s Install app option. Installation requires HTTPS (or localhost during development). Open the app online once before training offline.</p><p>Lock Screen Live Activities, interactive lock screen buttons, and Dynamic Island require a native iOS companion app using ActivityKit. They cannot run in a PWA.</p></section><section class="settings-card"><h2>Import your programming</h2><p>Create one calendar event per complete workout. Put the workout name in the title and every exercise on its own description line, then export an .ics file. Event titles, calendar dates and descriptions are preserved. Use <code>lift, Back squat, 5, 5, 80, kg</code> or <code>cardio, Running, 3, time, 10, min, 2</code>. Cardio measurements: time (min/sec/hr), distance (km/m/mi), calories (kcal). Zones: 1–5. Lift units: kg, lb, % of Max, % of Bodyweight. Older lift notation is still supported. Recurring events are expanded up to 366 occurrences per series and 2,000 sessions per file. Re-importing skips matching events; it does not overwrite your edits.</p><p><a href="/workout-template.ics" download>Download a complete workout calendar template (.ics)</a></p><p>Calendar dates follow the event’s original timezone. Times and reminders are not scheduled. Import explicit calendar exports; external subscription URLs are not fetched.</p></section>`;
 }
 function editor(id) {
   const w = state.workouts.find((w) => w.id === id) || {
@@ -162,8 +177,60 @@ function editor(id) {
     const row = document.createElement("div");
     row.className = "exercise-fields";
     row.dataset.id = e.id;
-    row.innerHTML = `<label class="exercise-name">Exercise<input data-field="name" required maxlength="100" value="${esc(e.name)}" placeholder="Back squat"></label><label>Sets<input data-field="sets" type="number" min="1" max="50" required value="${e.sets}"></label><label>Reps<input data-field="reps" type="number" min="1" max="1000" required value="${e.reps}"></label><label>Weight<input data-field="weight" type="number" min="0" step="0.01" value="${esc(e.weight)}"></label><label>Unit<select data-field="unit">${["kg", "lb", "%", "BW"].map((u) => `<option ${u === e.unit ? "selected" : ""}>${u}</option>`).join("")}</select></label><button type="button" class="icon-button remove" aria-label="Remove exercise">✕</button>`;
-    row.querySelector(".remove").onclick = () => row.remove();
+    row.classList.add("typed-exercise");
+    const draft = { type: e.type || "lift", ...e };
+    function draw() {
+      const options = (values, value) =>
+        values
+          .map(
+            ([v, label]) =>
+              `<option value="${v}" ${v === value ? "selected" : ""}>${label}</option>`,
+          )
+          .join("");
+      row.innerHTML = `<label class="exercise-type">Exercise type<select data-field="type">${options(
+        [
+          ["lift", "Lift"],
+          ["cardio", "Cardio"],
+        ],
+        draft.type,
+      )}</select></label><label class="exercise-name">Exercise<input data-field="name" required maxlength="100" value="${esc(draft.name)}" placeholder="${draft.type === "cardio" ? "Running" : "Back squat"}"></label>${
+        draft.type === "cardio"
+          ? `<label>Sets<input data-field="sets" type="number" min="1" max="50" required value="${draft.sets}"></label><label>Measurement<select data-field="measurement">${options(
+              [
+                ["time", "Time"],
+                ["distance", "Distance"],
+                ["calories", "Calories"],
+              ],
+              draft.measurement || "time",
+            )}</select></label><label>Target<input data-field="magnitude" type="number" min="0.01" step="0.01" required value="${draft.magnitude || ""}"></label><label>Unit<select data-field="cardioUnit">${options(
+              cardioUnits[draft.measurement || "time"].map((u) => [u, u]),
+              draft.cardioUnit,
+            )}</select></label><label>Heart rate zone<select data-field="zone">${options(
+              [1, 2, 3, 4, 5].map((n) => [String(n), String(n)]),
+              String(draft.zone || 2),
+            )}</select></label>`
+          : `<label>Sets<input data-field="sets" type="number" min="1" max="50" required value="${draft.sets}"></label><label>Reps<input data-field="reps" type="number" min="1" max="1000" required value="${draft.reps}"></label><label>${draft.unit === "BW%" ? "Bodyweight %" : draft.unit === "%" ? "% of Max" : "Weight"}<input data-field="weight" type="number" min="0" step="0.01" value="${esc(draft.weight)}"></label><label>Unit<select data-field="unit">${options(
+              [
+                ["kg", "kg"],
+                ["lb", "lb"],
+                ["%", "% of Max"],
+                ["BW%", "% of Bodyweight"],
+              ],
+              draft.unit,
+            )}</select></label>`
+      }<button type="button" class="icon-button remove" aria-label="Remove exercise">✕</button>`;
+      for (const control of row.querySelectorAll("[data-field]"))
+        control.onchange = () => {
+          for (const field of row.querySelectorAll("[data-field]"))
+            draft[field.dataset.field] = field.value;
+          if (control.dataset.field === "measurement")
+            draft.cardioUnit = cardioUnits[draft.measurement][0];
+          if (["type", "measurement", "unit"].includes(control.dataset.field))
+            draw();
+        };
+      row.querySelector(".remove").onclick = () => row.remove();
+    }
+    draw();
     fields.append(row);
   }
   w.exercises.forEach(add);
@@ -187,17 +254,34 @@ function editor(id) {
     const exercises = [...fields.children].map((row) => {
       const get = (f) => row.querySelector(`[data-field="${f}"]`).value;
       const old = w.exercises.find((x) => x.id === row.dataset.id);
+      const type = get("type"),
+        sameType = old && (old.type || "lift") === type;
       const sets = +get("sets");
-      return {
+      const base = {
         id: row.dataset.id,
+        type,
         name: get("name").trim(),
         sets,
-        reps: +get("reps"),
-        weight: get("weight"),
-        unit: get("unit"),
-        done: (old?.done || []).filter((n) => n < sets),
-        logs: (old?.logs || []).filter((log) => log.set < sets),
+        done: sameType ? (old.done || []).filter((n) => n < sets) : [],
+        logs: sameType ? (old.logs || []).filter((log) => log.set < sets) : [],
       };
+      return type === "cardio"
+        ? {
+            ...base,
+            measurement: get("measurement"),
+            magnitude: +get("magnitude"),
+            cardioUnit: get("cardioUnit"),
+            zone: +get("zone"),
+            reps: 1,
+            weight: "",
+            unit: "kg",
+          }
+        : {
+            ...base,
+            reps: +get("reps"),
+            weight: get("weight"),
+            unit: get("unit"),
+          };
     });
     if (!form.get("title").trim() || exercises.some((x) => !x.name)) return;
     const updated = {
@@ -298,7 +382,7 @@ function bind() {
         const w = state.workouts.find((w) => w.id === state.active),
           e = w.exercises.find((e) => e.id === b.dataset.complete);
         const input = document.querySelector("#actual-weight");
-        if (!input.checkValidity()) {
+        if (input && !input.checkValidity()) {
           input.reportValidity();
           return;
         }
@@ -307,7 +391,7 @@ function bind() {
           Array.from({ length: e.sets }, (_, i) => i).find(
             (i) => !e.done.includes(i),
           ),
-          input.value,
+          input?.value,
         );
       }),
   );
@@ -364,7 +448,7 @@ function bind() {
         )
       )
         return;
-      state = data;
+      state = migrateExercises(data);
       persist();
       render();
       toast("Backup restored.");
@@ -376,6 +460,21 @@ function bind() {
 function validateBackup(data) {
   if (!data || !Array.isArray(data.workouts) || data.workouts.length > 10000)
     throw Error("Invalid backup.");
+  for (const w of data.workouts)
+    for (const e of w.exercises || []) {
+      if (e.type !== undefined && !["lift", "cardio"].includes(e.type))
+        throw Error("Invalid exercise type.");
+      if (
+        isCardio(e) &&
+        (!cardioUnits[e.measurement]?.includes(e.cardioUnit) ||
+          !Number.isFinite(e.magnitude) ||
+          e.magnitude <= 0 ||
+          !Number.isInteger(e.zone) ||
+          e.zone < 1 ||
+          e.zone > 5)
+      )
+        throw Error("Invalid cardio data.");
+    }
   const ids = new Set();
   for (const w of data.workouts) {
     if (
@@ -402,7 +501,7 @@ function validateBackup(data) {
         !Array.isArray(e.done) ||
         new Set(e.done).size !== e.done.length ||
         e.done.some((n) => !Number.isInteger(n) || n < 0 || n >= e.sets) ||
-        !["kg", "lb", "lbs", "%", "BW"].includes(e.unit) ||
+        !["kg", "lb", "lbs", "%", "BW", "BW%"].includes(e.unit) ||
         !["string", "number"].includes(typeof e.weight)
       )
         throw Error("Invalid exercise data.");
@@ -423,7 +522,7 @@ function validateBackup(data) {
               !Number.isInteger(log.reps) ||
               log.reps < 1 ||
               log.reps > 1000 ||
-              !["kg", "lb", "lbs", "%", "BW"].includes(log.unit) ||
+              !["kg", "lb", "lbs", "%", "BW", "BW%"].includes(log.unit) ||
               typeof log.completedAt !== "string",
           ))
       )

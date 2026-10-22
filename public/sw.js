@@ -1,4 +1,4 @@
-const CACHE = "stack-days-v2";
+const CACHE = "stack-days-v3";
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
