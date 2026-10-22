@@ -1,6 +1,6 @@
-# FORM
+# Stack Days
 
-A local-first workout calendar and progressive web app. Import your programming from an iCalendar file, schedule and edit workouts, and log each set. No account or backend is required.
+A white and light blue, local-first workout calendar and progressive web app. Import your programming from an iCalendar file, schedule and edit workouts, and log each set. No account or backend is required.
 
 ## Develop
 
@@ -30,7 +30,7 @@ Deploy `dist/` to a static HTTPS host at the domain root. The manifest and servi
 - Matching event UID and occurrence identifiers prevent duplicate imports. Re-importing preserves existing edits and progress rather than applying calendar changes. Delete a session before re-importing it if you want to replace it.
 - Start a session, complete sets, undo individual completed sets, then finish the session after all prescribed sets are done. Progress survives reloads.
 - Export JSON backups from **App & data**. Restore replaces current data after confirmation. Browser storage can be erased or evicted, so keep regular backups. There is no cloud synchronization across devices.
-- On iPhone, use Safari → Share → Add to Home Screen. Open the app online once before offline use. Offline caching is enabled in production builds, not the development server.
+- On iPhone, use Safari → Share → Add to Home Screen (the label is STACK). Open the app online once before offline use. Offline caching is enabled in production builds, not the development server.
 
 ## iOS platform limits
 
@@ -39,3 +39,25 @@ A PWA cannot create ActivityKit Live Activities, interactive Lock Screen complet
 ## Privacy
 
 All workout data is stored in localStorage on the current browser/device. Calendar content is treated as text and is never uploaded. Assets are served from the app origin; there are no analytics or external font requests. The service worker caches app assets for offline use.
+
+## Complete-workout calendar template
+
+Create **one event per workout**. Set the event title to the workout name. Put each lift on its own line in the description:
+
+```text
+Back squat 5x5 @ 80kg
+Bench press 3x8 @ 50kg
+Romanian deadlift 3x10 @ 60kg
+Pull-ups 3x6
+Notes: Rest 2 minutes between sets.
+```
+
+Use `Exercise name SETSxREPS @ WEIGHTkg` (or `lb`). Weight is optional. Keep sets between 1 and 50 and reps between 1 and 1000. Bullets and numbered lines are supported. Export your calendar as `.ics`, then import it. All four lifts appear inside **one** workout. Do not create a separate event for each lift. Non-prescription lines stay as notes. Use consistent lift names to combine history correctly.
+
+Download the ready-made example from **App & data → Download a complete workout calendar template**, or use [examples/programming.ics](examples/programming.ics). Change the event title, date and UID for each new workout. In raw ICS, description line breaks are escaped as `\n`, while a calendar editor accepts real line breaks. The supplied file already handles this encoding.
+
+## Lift history
+
+The **Lift history** tab appears in the bottom navigation on phones and the sidebar on desktop. Select a lift to see each completed set with its session date, weight, unit and reps. The active workout lets you enter the actual weight for each set; the small numbered set buttons use the prescribed weight. Undoing a set removes its history entry. New sets preserve a snapshot even if you later edit the prescription. Existing completed sets without snapshots fall back to the prescription and are marked with an asterisk. Kilograms, pounds, percentages and bodyweight are kept separate. Deleting a workout deletes its history. Existing local workouts and older backups remain supported; the original storage key is intentionally retained.
+
+After deployment, reopen the app online to receive the updated service worker. iOS may retain the old installed icon/name; export a backup before reinstalling, then add the updated site to the Home Screen as STACK and restore the backup if needed.

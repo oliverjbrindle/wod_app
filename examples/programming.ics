@@ -1,10 +1,14 @@
 BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//FORM//Example Programming//EN
+PRODID:-//Stack Days//Workout Template//EN
+CALSCALE:GREGORIAN
 BEGIN:VEVENT
-UID:form-example-lower-20261022
-DTSTART;VALUE=DATE:20261022
-SUMMARY:Lower body strength
-DESCRIPTION:Back squat 5x5 @ 80kg\nRomanian deadlift 3x8 @ 60kg\nRest two minutes between sets.
+UID:stack-days-strength-20261026@example.com
+DTSTAMP:20261022T120000Z
+DTSTART;VALUE=DATE:20261026
+DTEND;VALUE=DATE:20261027
+SUMMARY:Full body strength
+DESCRIPTION:Back squat 5x5 @ 80kg\nBench press 3x8 @ 50kg\nRomanian deadl
+ ift 3x10 @ 60kg\nPull-ups 3x6\nNotes: Rest 2 minutes between sets.
 END:VEVENT
 END:VCALENDAR
