@@ -1,0 +1,16 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Stack Days//Workout Template//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:stack-days-mixed-20261026@example.com
+DTSTAMP:20261022T120000Z
+DTSTART;VALUE=DATE:20261026
+DTEND;VALUE=DATE:20261027
+SUMMARY:Full body strength
+DESCRIPTION:lift\, Back squat\, 5\, 5\, 80\, kg\nlift\, Bench press\, 3\,
+  8\, 75\, % of Max\nlift\, Pull-ups\, 3\, 6\, 100\, % of Bodyweight\ncar
+ dio\, Running\, 3\, time\, 10\, min\, 2\nNotes: Rest 2 minutes between s
+ ets.
+END:VEVENT
+END:VCALENDAR
